@@ -36,7 +36,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className="antialiased"> bg-[#F2F2F7] text-gray-900 antialiased`
+      <body className="antialiased">
         <AuthProvider>
             {/* The Toaster handles the nice popups (Success/Error messages) */}
             <Toaster position="top-center" toastOptions={{
