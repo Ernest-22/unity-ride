@@ -4,13 +4,13 @@ import { doc, getDoc, addDoc, collection, Timestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, MapPin, Calendar, Car, Armchair, CheckCircle2, Navigation, Clock } from 'lucide-react';
+import { ArrowLeft, MapPin, Calendar, Car, Armchair, CheckCircle2, Navigation, Clock, ShieldAlert } from 'lucide-react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 
 export default function OfferRidePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { profile } = useAuth();
+  const { profile, loading: authLoading } = useAuth(); // Get auth loading state
   const router = useRouter();
   
   const [event, setEvent] = useState<any>(null);
@@ -21,9 +21,9 @@ export default function OfferRidePage({ params }: { params: Promise<{ id: string
   const [seats, setSeats] = useState(3);
   const [price, setPrice] = useState('');
   const [isFree, setIsFree] = useState(false);
-  const [carModel, setCarModel] = useState('');
+  // Removed carModel state as we pull from profile
   const [pickupLocation, setPickupLocation] = useState('');
-  const [pickupTime, setPickupTime] = useState(''); // <--- NEW STATE
+  const [pickupTime, setPickupTime] = useState('');
 
   useEffect(() => {
     const fetchEvent = async () => {
@@ -37,6 +37,34 @@ export default function OfferRidePage({ params }: { params: Promise<{ id: string
     fetchEvent();
   }, [id]);
 
+  // --- 1. BLOCK UNVERIFIED DRIVERS ---
+  if (authLoading || loading) return <div className="min-h-screen flex items-center justify-center bg-[#F2F2F7]"><div className="w-8 h-8 border-4 border-black border-t-transparent rounded-full animate-spin"></div></div>;
+
+  if (profile && !profile.isVerified) {
+      return (
+          <div className="min-h-screen bg-[#F2F2F7] p-6 flex flex-col items-center justify-center text-center">
+              <div className="bg-white p-8 rounded-[2rem] shadow-xl max-w-sm">
+                  <div className="w-16 h-16 bg-orange-100 text-orange-600 rounded-full flex items-center justify-center mx-auto mb-6">
+                      <ShieldAlert className="w-8 h-8" />
+                  </div>
+                  <h1 className="text-2xl font-black text-gray-900 mb-2">Verification Required</h1>
+                  <p className="text-gray-500 mb-8 font-medium">
+                      To ensure safety, you must be a <strong>Verified Driver</strong> before you can offer rides.
+                  </p>
+                  
+                  <div className="space-y-3">
+                    <Link href="/profile" className="block w-full bg-black text-white py-4 rounded-xl font-bold hover:scale-105 transition-transform">
+                        Go to Profile
+                    </Link>
+                    <Link href="/dashboard" className="block w-full bg-gray-100 text-gray-600 py-4 rounded-xl font-bold">
+                        Back to Dashboard
+                    </Link>
+                  </div>
+              </div>
+          </div>
+      );
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
       if (!profile) return;
@@ -48,14 +76,17 @@ export default function OfferRidePage({ params }: { params: Promise<{ id: string
               driverId: profile.uid,
               driverName: profile.displayName || 'Driver',
               driverPhoto: profile.photoURL || null,
-              carModel: carModel || (profile as any)?.carModel || 'Standard Car',
+              // Logic: Use profile car data, fallback to 'Standard Car' if missing
+              carModel: (profile as any)?.carModel || 'Standard Car',
+              plateNumber: (profile as any)?.plateNumber || '', // Optional: Save plate too
               
               pickupLocation: pickupLocation,
-              pickupTime: pickupTime, // <--- SAVING TIME
+              pickupTime: pickupTime,
               
               seatsAvailable: Number(seats),
               price: isFree ? 0 : Number(price),
               passengers: [],
+              status: 'OPEN',
               createdAt: Timestamp.now()
           });
 
@@ -69,8 +100,6 @@ export default function OfferRidePage({ params }: { params: Promise<{ id: string
           setSubmitting(false);
       }
   };
-
-  if (loading) return <div className="min-h-screen flex items-center justify-center bg-[#F2F2F7]"><div className="w-8 h-8 border-4 border-black border-t-transparent rounded-full animate-spin"></div></div>;
 
   return (
     <div className="min-h-screen bg-[#F2F2F7] p-4 md:p-8 pb-32">
@@ -120,21 +149,18 @@ export default function OfferRidePage({ params }: { params: Promise<{ id: string
                     </div>
                 </div>
 
-                {/* 2. Car Model */}
-                <div className="space-y-2">
-                    <label htmlFor="carModel" className="text-xs font-bold uppercase text-gray-400 ml-1">Car Model</label>
-                    <div className="relative group">
-                        <Car className="absolute left-4 top-3.5 w-5 h-5 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
-                        <input 
-                            id="carModel"
-                            type="text" required
-                            placeholder="e.g. White Toyota Corolla"
-                            title="Car model"
-                            value={carModel}
-                            onChange={(e) => setCarModel(e.target.value)}
-                            className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 pl-12 pr-4 font-bold text-gray-900 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                        />
+                {/* 2. Car Info Display (Read Only) */}
+                <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 flex items-center gap-4">
+                    <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center border border-gray-100">
+                        <Car className="w-5 h-5 text-gray-500" />
                     </div>
+                    <div>
+                        <p className="text-xs font-bold uppercase text-gray-400">Your Vehicle</p>
+                        <p className="font-bold text-gray-900">{(profile as any)?.carModel || 'Car Not Set'}</p>
+                    </div>
+                    <Link href="/profile" className="ml-auto text-xs font-bold text-blue-600 hover:underline">
+                        Change
+                    </Link>
                 </div>
 
                 {/* 3. Seats & Price */}
@@ -185,7 +211,7 @@ export default function OfferRidePage({ params }: { params: Promise<{ id: string
 
                 <button 
                     type="submit" disabled={submitting}
-                    className="w-full bg-black text-white py-4 rounded-xl font-bold text-lg shadow-lg hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2 mt-4"
+                    className="w-full bg-black text-white py-4 rounded-xl font-bold text-lg shadow-lg hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2 mt-4 disabled:opacity-70 disabled:scale-100"
                 >
                     {submitting ? 'Publishing...' : 'Publish Ride'}
                 </button>
